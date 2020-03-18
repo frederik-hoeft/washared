@@ -9,20 +9,20 @@ namespace washared
     /// </summary>
     public class Network
     {
-        private readonly Client client;
+        private readonly Server server;
         private readonly Queue<string> networkQueue = new Queue<string>();
         private bool isProcessing = false;
         private bool abort = false;
         public Encoding Encoding { get; set; }
         #region Constructor
-        public Network(Client client)
+        public Network(Server server)
         {
-            this.client = client;
+            this.server = server;
             Encoding = Encoding.UTF8;
         }
-        public Network(Client client, Encoding encoding)
+        public Network(Server client, Encoding encoding)
         {
-            this.client = client;
+            this.server = client;
             Encoding = encoding;
         }
         #endregion
@@ -67,8 +67,8 @@ namespace washared
                 buffer[0] = 0x01;
                 Array.Copy(data, 0, buffer, 1, data.Length);
                 buffer[^1] = 0x04;
-                client.SslStream.Write(buffer);
-                client.SslStream.Flush();
+                server.SslStream.Write(buffer);
+                server.SslStream.Flush();
             }
             isProcessing = false;
         }

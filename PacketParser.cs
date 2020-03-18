@@ -11,10 +11,10 @@ namespace washared
     public class PacketParser : IDisposable
     {
         private bool _disposed = false;
-        private readonly Client client;
+        private readonly Server server;
         private bool isRunning = false;
         private readonly Queue<byte[]> dataQueue = new Queue<byte[]>();
-        private Thread subscriptorThread = null;
+        private Thread subscribedThread = null;
 
         private Action<byte[]> packetActionCallback = null;
         private bool releaseResources = true;
@@ -23,9 +23,9 @@ namespace washared
         private bool interactive = false;
         private int interactiveTimeout = 10000;
 
-        public PacketParser(Client client)
+        public PacketParser(Server server)
         {
-            this.client = client;
+            this.server = server;
         }
 
         /// <summary>
@@ -139,7 +139,7 @@ namespace washared
                 return dataQueue.Dequeue();
             }
             Thread waiter = Thread.CurrentThread;
-            subscriptorThread = waiter;
+            subscribedThread = waiter;
             try
             {
                 Thread.Sleep(interactiveTimeout);
@@ -167,7 +167,7 @@ namespace washared
                 while (receiving)
                 {
                     // Receive and dump to buffer until EOT flag (used to terminate packets in custom protocol --> hex value 0x04) is found
-                    int connectionDropped = client.SslStream.Read(data);
+                    int connectionDropped = server.SslStream.Read(data);
                     if (connectionDropped == 0)
                     {
                         // Connection was dropped.
@@ -259,6 +259,7 @@ namespace washared
                     // Remove entry point marker byte (0x01)
                     byte[] parsedData = new byte[packet.Length - 1];
                     Array.Copy(packet, 1, parsedData, 0, packet.Length - 1);
+                    // Handle packets
                     if (packetActionCallback != null)
                     {
                         if (useMultiThreading)
@@ -273,9 +274,9 @@ namespace washared
                     if (interactive)
                     {
                         dataQueue.Enqueue(parsedData);
-                        if (subscriptorThread != null && subscriptorThread.ThreadState == ThreadState.WaitSleepJoin)
+                        if (subscribedThread != null && subscribedThread.ThreadState == ThreadState.WaitSleepJoin)
                         {
-                            subscriptorThread.Interrupt();
+                            subscribedThread.Interrupt();
                         }
                     }
                 }
@@ -299,8 +300,8 @@ namespace washared
                 {
                     try
                     {
-                        client.SslStream.Close();
-                        client.SslStream.Dispose();
+                        server.SslStream.Close();
+                        server.SslStream.Dispose();
                     }
                     catch (ObjectDisposedException) { }
                 }
