@@ -4,6 +4,7 @@ using System.Linq;
 using System.Net.Security;
 using System.Net.Sockets;
 using System.Threading;
+using System.Threading.Tasks;
 
 namespace washared
 {
@@ -11,35 +12,146 @@ namespace washared
     {
         private bool _disposed = false;
         private readonly Client client;
-        private readonly bool releaseResources;
-        #region Constructor
+        private bool isRunning = false;
+        private readonly Queue<byte[]> dataQueue = new Queue<byte[]>();
+        private Thread subscriptorThread = null;
+
+        private Action<byte[]> packetActionCallback = null;
+        private bool releaseResources = true;
+        private bool useBackgroundParsing = false;
+        private bool useMultiThreading = true;
+        private bool interactive = false;
+        private int interactiveTimeout = 10000;
+
         public PacketParser(Client client)
         {
             this.client = client;
-            releaseResources = true;
-        }
-        public PacketParser(Client client, bool releaseResources)
-        {
-            this.client = client;
-            this.releaseResources = releaseResources;
-        }
-        #endregion
-
-        /// <summary>
-        /// (Blocking) Begin parsing incoming packets. Create a new thread for each packet.
-        /// </summary>
-        /// <param name="PacketActionCallback">The function to be called for each parsed packet.</param>
-        public void BeginParse(Action<byte[]> PacketActionCallback)
-        {
-            BeginParse(PacketActionCallback, true);
         }
 
         /// <summary>
-        /// (Blocking) Begin parsing incoming packets.
+        /// Specifies the timeout in milliseconds after which GetPacketAsync automatically terminates. Default 10.
         /// </summary>
-        /// <param name="PacketActionCallback">The function to be called for each parsed packet.</param>
-        /// <param name="useMultiThreading">True if a new thread should be created for each incoming packet. False otherwise</param>
-        public void BeginParse(Action<byte[]> PacketActionCallback, bool useMultiThreading)
+        public int GetPacketTimeoutMillis
+        {
+            get { return interactiveTimeout; }
+            set
+            {
+                if (!isRunning)
+                {
+                    interactiveTimeout = value;
+                }
+            }
+        }
+        /// <summary>
+        /// Executes the specified function for each received packet. If null option will be ignored. Cannot be changed once BeginParse() is called.
+        /// </summary>
+        public Action<byte[]> PacketActionCallback
+        {
+            get { return packetActionCallback; }
+            set
+            {
+                if (!isRunning)
+                {
+                    packetActionCallback = value;
+                }
+            }
+        }
+        /// <summary>
+        /// Specifies whether a new thread will be started to handle each packet. Option will be ignored if PacketActionCallback is null. Cannot be changed once BeginParse() is called.
+        /// </summary>
+        public bool UseMultiThreading
+        {
+            get { return useMultiThreading; }
+            set
+            {
+                if (!isRunning)
+                {
+                    useMultiThreading = value;
+                }
+            }
+        }
+        /// <summary>
+        /// Specifies whether packets will be handled in the background or if the current thread should be used for packet handling. Cannot be changed once BeginParse() is called.
+        /// </summary>
+        public bool UseBackgroundParsing
+        {
+            get { return useBackgroundParsing; }
+            set
+            {
+                if (!isRunning)
+                {
+                    useBackgroundParsing = value;
+                }
+            }
+        }
+        /// <summary>
+        /// Specifies whether the client's SslStream should be released once this object is being disposed. Cannot be changed once BeginParse() is called.
+        /// </summary>
+        public bool ReleaseResources
+        {
+            get { return releaseResources; }
+            set
+            {
+                if (!isRunning)
+                {
+                    releaseResources = value;
+                }
+            }
+        }
+        /// <summary>
+        /// Specifies whether packets should be added to the DataQueue to be handled manually. Cannot be changed once BeginParse() is called.
+        /// </summary>
+        public bool Interactive
+        {
+            get { return interactive; }
+            set
+            {
+                if (!isRunning)
+                {
+                    interactive = value;
+                }
+            }
+        }
+
+        public void BeginParse()
+        {
+            if (isRunning)
+            {
+                return;
+            }
+            isRunning = true;
+            if (UseBackgroundParsing)
+            {
+                new Thread(() => Parse()).Start();
+            }
+            else
+            {
+                Parse();
+            }
+        }
+
+        public Task<byte[]> GetPacketAsync() => Task.Run(() => GetPacket());
+
+        private byte[] GetPacket()
+        {
+            if (dataQueue.Count > 0)
+            {
+                return dataQueue.Dequeue();
+            }
+            Thread waiter = Thread.CurrentThread;
+            subscriptorThread = waiter;
+            try
+            {
+                Thread.Sleep(interactiveTimeout);
+            }
+            catch (ThreadInterruptedException)
+            {
+                return dataQueue.Dequeue();
+            }
+            return Array.Empty<byte>();
+        }
+
+        private void Parse()
         {
             // Initialize buffer for huge packets (>32 kb)
             List<byte> buffer = new List<byte>();
@@ -147,13 +259,24 @@ namespace washared
                     // Remove entry point marker byte (0x01)
                     byte[] parsedData = new byte[packet.Length - 1];
                     Array.Copy(packet, 1, parsedData, 0, packet.Length - 1);
-                    if (useMultiThreading)
+                    if (packetActionCallback != null)
                     {
-                        new Thread(() => PacketActionCallback(parsedData)).Start();
+                        if (useMultiThreading)
+                        {
+                            new Thread(() => packetActionCallback(parsedData)).Start();
+                        }
+                        else
+                        {
+                            packetActionCallback(parsedData);
+                        }
                     }
-                    else
+                    if (interactive)
                     {
-                        PacketActionCallback(parsedData);
+                        dataQueue.Enqueue(parsedData);
+                        if (subscriptorThread != null && subscriptorThread.ThreadState == ThreadState.WaitSleepJoin)
+                        {
+                            subscriptorThread.Interrupt();
+                        }
                     }
                 }
             }
