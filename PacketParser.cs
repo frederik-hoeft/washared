@@ -1,5 +1,7 @@
 ﻿using System;
 using System.Collections.Generic;
+using System.Diagnostics;
+using System.IO;
 using System.Linq;
 using System.Net.Security;
 using System.Net.Sockets;
@@ -11,7 +13,7 @@ namespace washared
     public class PacketParser : IDisposable
     {
         private bool _disposed = false;
-        private readonly Server server;
+        private readonly NetworkInterface networkInterface;
         private bool isRunning = false;
         private readonly Queue<byte[]> dataQueue = new Queue<byte[]>();
         private Thread subscribedThread = null;
@@ -23,15 +25,17 @@ namespace washared
         private bool interactive = false;
         private int interactiveTimeout = 10000;
 
-        public PacketParser(Server server)
+        public PacketParser(NetworkInterface networkInterface)
         {
-            this.server = server;
+            this.networkInterface = networkInterface;
         }
+
+        public bool IsDead { get; private set; } = false;
 
         /// <summary>
         /// Specifies the timeout in milliseconds after which GetPacketAsync automatically terminates. Default 10.
         /// </summary>
-        public int GetPacketTimeoutMillis
+        public int PacketTimeoutMillis
         {
             get { return interactiveTimeout; }
             set
@@ -120,20 +124,51 @@ namespace washared
                 return;
             }
             isRunning = true;
-            if (UseBackgroundParsing)
+            if (useBackgroundParsing)
             {
-                new Thread(() => Parse()).Start();
+                new Thread(() => 
+                {
+                    try
+                    {
+                        Parse();
+                    }
+                    catch (Exception ex)
+                    {
+                        Dispose();
+                        if (!(ex is ConnectionDroppedException))
+                        {
+                            throw;
+                        }
+                        IsDead = false;
+                    }
+                }).Start();
             }
             else
             {
-                Parse();
+                try
+                {
+                    Parse();
+                }
+                catch (Exception ex)
+                {
+                    Dispose();
+                    if (!(ex is ConnectionDroppedException))
+                    {
+                        throw;
+                    }
+                    IsDead = true;
+                }
             }
         }
 
         public Task<byte[]> GetPacketAsync() => Task.Run(() => GetPacket());
 
-        private byte[] GetPacket()
+        public byte[] GetPacket()
         {
+            if (IsDead)
+            {
+                throw new ConnectionDroppedException();
+            }
             if (dataQueue.Count > 0)
             {
                 return dataQueue.Dequeue();
@@ -149,6 +184,12 @@ namespace washared
                 return dataQueue.Dequeue();
             }
             return Array.Empty<byte>();
+        }
+
+        public async Task ShutdownAsync()
+        {
+            await networkInterface.SslStream.ShutdownAsync();
+            Dispose();
         }
 
         private void Parse()
@@ -167,7 +208,15 @@ namespace washared
                 while (receiving)
                 {
                     // Receive and dump to buffer until EOT flag (used to terminate packets in custom protocol --> hex value 0x04) is found
-                    int connectionDropped = server.SslStream.Read(data);
+                    int connectionDropped = 0;
+                    try
+                    {
+                        connectionDropped = networkInterface.SslStream.Read(data);
+                    }
+                    catch (IOException) 
+                    { 
+                        throw new ConnectionDroppedException(); 
+                    }
                     if (connectionDropped == 0)
                     {
                         // Connection was dropped.
@@ -274,7 +323,7 @@ namespace washared
                     if (interactive)
                     {
                         dataQueue.Enqueue(parsedData);
-                        if (subscribedThread != null && subscribedThread.ThreadState == ThreadState.WaitSleepJoin)
+                        if (subscribedThread != null && subscribedThread.ThreadState == System.Threading.ThreadState.WaitSleepJoin)
                         {
                             subscribedThread.Interrupt();
                         }
@@ -300,8 +349,8 @@ namespace washared
                 {
                     try
                     {
-                        server.SslStream.Close();
-                        server.SslStream.Dispose();
+                        networkInterface.SslStream.Close();
+                        networkInterface.SslStream.Dispose();
                     }
                     catch (ObjectDisposedException) { }
                 }

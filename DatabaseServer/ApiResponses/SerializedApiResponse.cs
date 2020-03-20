@@ -10,9 +10,9 @@ namespace washared.DatabaseServer.ApiResponses
         public readonly ResponseId ResponseId;
         public readonly string Json;
         [Obsolete("Only used for JSON parsing. Use SerializedApiResponse.Create() instead.")]
-        public SerializedApiResponse(ResponseId sqlResponseId, string json)
+        public SerializedApiResponse(ResponseId responseId, string json)
         {
-            ResponseId = sqlResponseId;
+            ResponseId = responseId;
             Json = json;
         }
 
@@ -32,10 +32,10 @@ namespace washared.DatabaseServer.ApiResponses
         {
             return ResponseId switch
             {
-                ResponseId.Get2DArray => JsonConvert.DeserializeObject<Get2DArrayResponse>(Json),
-                ResponseId.GetDataArray => JsonConvert.DeserializeObject<GetDataArrayResponse>(Json),
-                ResponseId.GetSingleOrDefault => JsonConvert.DeserializeObject<GetSingleOrDefaultResponse>(Json),
-                ResponseId.ModifyData => JsonConvert.DeserializeObject<ModifyDataResponse>(Json),
+                ResponseId.Get2DArray => JsonConvert.DeserializeObject<Sql2DArrayResponse>(Json),
+                ResponseId.GetDataArray => JsonConvert.DeserializeObject<SqlDataArrayResponse>(Json),
+                ResponseId.GetSingleOrDefault => JsonConvert.DeserializeObject<SqlSingleOrDefaultResponse>(Json),
+                ResponseId.ModifyData => JsonConvert.DeserializeObject<SqlModifyDataResponse>(Json),
                 _ => null
             };
         }
