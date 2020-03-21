@@ -10,7 +10,7 @@ namespace washared.DatabaseServer.ApiRequests
     /// </summary>
     public abstract class ApiRequestBase
     {
-        public RequestId RequestId;
+        public SqlRequestId RequestId;
         public string Query;
         public int ExpectedColumns;
     }

@@ -8,7 +8,7 @@ namespace washared.DatabaseServer.ApiResponses
     {
         public readonly int Result;
         [Obsolete("Only used for JSON parsing. Use ModifyDataResponse.Create() instead.")]
-        public SqlModifyDataResponse(ResponseId responseId, int result, bool success)
+        public SqlModifyDataResponse(SqlResponseId responseId, int result, bool success)
         {
             ResponseId = responseId;
             Result = result;
@@ -18,7 +18,7 @@ namespace washared.DatabaseServer.ApiResponses
         public static SqlModifyDataResponse Create(int result)
         {
 #pragma warning disable CS0618 // Type or member is obsolete
-            return new SqlModifyDataResponse(ResponseId.ModifyData, result, true);
+            return new SqlModifyDataResponse(SqlResponseId.ModifyData, result, true);
 #pragma warning restore CS0618 // Type or member is obsolete
         }
     }

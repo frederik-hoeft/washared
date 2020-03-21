@@ -7,7 +7,7 @@ namespace washared.DatabaseServer.ApiResponses
 {
     public abstract class ApiResponse
     {
-        public ResponseId ResponseId;
+        public SqlResponseId ResponseId;
         public bool Success;
 
         /// <summary>
