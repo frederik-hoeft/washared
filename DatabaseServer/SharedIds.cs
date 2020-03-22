@@ -14,9 +14,10 @@ namespace washared.DatabaseServer
     }
     public enum SqlResponseId
     {
+        Error = -1,
         Get2DArray = 0,
         GetDataArray = 1,
         GetSingleOrDefault = 2,
-        ModifyData = 3
+        ModifyData = 3,
     }
 }

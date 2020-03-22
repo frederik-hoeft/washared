@@ -1,5 +1,6 @@
 ﻿using System;
 using System.Collections.Generic;
+using System.Diagnostics;
 using System.Text;
 
 namespace washared
@@ -59,6 +60,7 @@ namespace washared
             {
                 return;
             }
+            isProcessing = true;
             while (networkQueue.Count > 0 && !abort)
             {
                 string rawData = networkQueue.Dequeue();

@@ -32,6 +32,7 @@ namespace washared.DatabaseServer.ApiResponses
         {
             return ResponseId switch
             {
+                SqlResponseId.Error => JsonConvert.DeserializeObject<SqlErrorResponse>(Json),
                 SqlResponseId.Get2DArray => JsonConvert.DeserializeObject<Sql2DArrayResponse>(Json),
                 SqlResponseId.GetDataArray => JsonConvert.DeserializeObject<SqlDataArrayResponse>(Json),
                 SqlResponseId.GetSingleOrDefault => JsonConvert.DeserializeObject<SqlSingleOrDefaultResponse>(Json),

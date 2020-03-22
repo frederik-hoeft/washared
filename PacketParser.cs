@@ -233,7 +233,7 @@ namespace washared
                         // Split packets on EOT flag (might be more than one packet)
                         List<byte[]> rawDataPackets = data.Separate(new byte[] { 0x04 });
                         // Grab the last packet
-                        byte[] lastDataPacket = rawDataPackets[rawDataPackets.Count - 1];
+                        byte[] lastDataPacket = rawDataPackets[^1];
                         // Move all but the last packet into the 2d packet array list
                         List<byte[]> tempRawDataPackets = new List<byte[]>(rawDataPackets);
                         tempRawDataPackets.Remove(tempRawDataPackets.Last());
@@ -259,7 +259,7 @@ namespace washared
                         // Reset the buffer
                         buffer = new List<byte>();
                         // Grab the last packet
-                        byte[] lastDataPacket = rawDataPackets[rawDataPackets.Count - 1];
+                        byte[] lastDataPacket = rawDataPackets[^1];
                         // Move all but the last packet into the 2d packet array list
                         List<byte[]> tempRawDataPackets = new List<byte[]>(rawDataPackets);
                         tempRawDataPackets.Remove(tempRawDataPackets.Last());
@@ -323,7 +323,7 @@ namespace washared
                     if (interactive)
                     {
                         dataQueue.Enqueue(parsedData);
-                        if (subscribedThread != null && subscribedThread.ThreadState == System.Threading.ThreadState.WaitSleepJoin)
+                        if (subscribedThread != null && (subscribedThread.ThreadState & System.Threading.ThreadState.WaitSleepJoin) == System.Threading.ThreadState.WaitSleepJoin)
                         {
                             subscribedThread.Interrupt();
                         }
