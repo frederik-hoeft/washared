@@ -173,8 +173,7 @@ namespace washared
             {
                 return dataQueue.Dequeue();
             }
-            Thread waiter = Thread.CurrentThread;
-            subscribedThread = waiter;
+            subscribedThread = Thread.CurrentThread;
             try
             {
                 Thread.Sleep(interactiveTimeout);

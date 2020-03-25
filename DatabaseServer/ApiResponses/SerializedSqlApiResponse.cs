@@ -5,21 +5,21 @@ using System.Text;
 
 namespace washared.DatabaseServer.ApiResponses
 {
-    public class SerializedApiResponse
+    public class SerializedSqlApiResponse
     {
         public readonly SqlResponseId ResponseId;
         public readonly string Json;
         [Obsolete("Only used for JSON parsing. Use SerializedApiResponse.Create() instead.")]
-        public SerializedApiResponse(SqlResponseId responseId, string json)
+        public SerializedSqlApiResponse(SqlResponseId responseId, string json)
         {
             ResponseId = responseId;
             Json = json;
         }
 
-        public static SerializedApiResponse Create(ApiResponse apiResponse)
+        public static SerializedSqlApiResponse Create(ApiResponse apiResponse)
         {
 #pragma warning disable CS0618 // Type or member is obsolete
-            return new SerializedApiResponse(apiResponse.ResponseId, JsonConvert.SerializeObject(apiResponse));
+            return new SerializedSqlApiResponse(apiResponse.ResponseId, JsonConvert.SerializeObject(apiResponse));
 #pragma warning restore CS0618 // Type or member is obsolete
         }
 
