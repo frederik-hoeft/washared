@@ -33,7 +33,7 @@ namespace washared
         public bool IsDead { get; private set; } = false;
 
         /// <summary>
-        /// Specifies the timeout in milliseconds after which GetPacketAsync automatically terminates. Default 10.
+        /// Specifies the timeout in milliseconds after which GetPacketAsync automatically terminates. Default 10 seconds.
         /// </summary>
         public int PacketTimeoutMillis
         {
