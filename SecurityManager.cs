@@ -14,24 +14,22 @@ namespace washared
     {
         public static X509Certificate2 CreateFromCertFile(string certFile, string keyFile)
         {
-            var cert = new X509Certificate2(certFile)
+            return new X509Certificate2(certFile)
             {
                 PrivateKey = CreateRSAFromFile(keyFile)
             };
-
-            return cert;
         }
 
         private static RSACryptoServiceProvider CreateRSAFromFile(string filename)
         {
             byte[] pvk = null;
-            using (var fs = File.Open(filename, FileMode.Open, FileAccess.Read, FileShare.Read))
+            using (FileStream fs = File.Open(filename, FileMode.Open, FileAccess.Read, FileShare.Read))
             {
                 pvk = new byte[fs.Length];
                 fs.Read(pvk, 0, pvk.Length);
             }
 
-            var rsa = new RSACryptoServiceProvider();
+            RSACryptoServiceProvider rsa = new RSACryptoServiceProvider();
             rsa.ImportCspBlob(pvk);
 
             return rsa;

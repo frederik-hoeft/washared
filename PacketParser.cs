@@ -16,14 +16,13 @@ namespace washared
         private readonly NetworkInterface networkInterface;
         private bool isRunning = false;
         private readonly Queue<byte[]> dataQueue = new Queue<byte[]>();
-        private Thread subscribedThread = null;
 
         private Action<byte[]> packetActionCallback = null;
         private bool releaseResources = true;
         private bool useBackgroundParsing = false;
         private bool useMultiThreading = true;
         private bool interactive = false;
-        private int interactiveTimeout = 10000;
+        private readonly ManualResetEvent suspendEvent = new ManualResetEvent(true);
 
         public PacketParser(NetworkInterface networkInterface)
         {
@@ -32,20 +31,6 @@ namespace washared
 
         public bool IsDead { get; private set; } = false;
 
-        /// <summary>
-        /// Specifies the timeout in milliseconds after which GetPacketAsync automatically terminates. Default 10.
-        /// </summary>
-        public int PacketTimeoutMillis
-        {
-            get { return interactiveTimeout; }
-            set
-            {
-                if (!isRunning)
-                {
-                    interactiveTimeout = value;
-                }
-            }
-        }
         /// <summary>
         /// Executes the specified function for each received packet. If null option will be ignored. Cannot be changed once BeginParse() is called.
         /// </summary>
@@ -126,45 +111,36 @@ namespace washared
             isRunning = true;
             if (useBackgroundParsing)
             {
-                new Thread(() => 
-                {
-                    try
-                    {
-                        Parse();
-                    }
-                    catch (Exception ex)
-                    {
-                        Dispose();
-                        if (!(ex is ConnectionDroppedException))
-                        {
-                            throw;
-                        }
-                        IsDead = false;
-                    }
-                }).Start();
+                new Thread(TryParse).Start();
             }
             else
             {
-                try
-                {
-                    Parse();
-                }
-                catch (Exception ex)
-                {
-                    Dispose();
-                    if (!(ex is ConnectionDroppedException))
-                    {
-                        throw;
-                    }
-                    IsDead = true;
-                }
+                TryParse();
             }
         }
 
-        public Task<byte[]> GetPacketAsync() => Task.Run(() => GetPacket());
-
-        public byte[] GetPacket()
+        private void TryParse()
         {
+            try
+            {
+                Parse();
+            }
+            catch (Exception ex)
+            {
+                Dispose();
+                if (!(ex is ConnectionDroppedException))
+                {
+                    throw;
+                }
+                IsDead = false;
+            }
+        }
+
+        public async Task<byte[]> GetPacket() => await GetPacket(Timeout.Infinite);
+
+        public async Task<byte[]> GetPacket(int millisTimeout)
+        {
+            suspendEvent.Reset();
             if (IsDead)
             {
                 throw new ConnectionDroppedException();
@@ -173,12 +149,9 @@ namespace washared
             {
                 return dataQueue.Dequeue();
             }
-            subscribedThread = Thread.CurrentThread;
-            try
-            {
-                Thread.Sleep(interactiveTimeout);
-            }
-            catch (ThreadInterruptedException)
+            await Task.Run(() => suspendEvent.WaitOne(millisTimeout));
+            suspendEvent.Reset();
+            if (dataQueue.Count > 0)
             {
                 return dataQueue.Dequeue();
             }
@@ -196,7 +169,7 @@ namespace washared
             // Initialize buffer for huge packets (>32 kb)
             List<byte> buffer = new List<byte>();
             // Initialize 32 kb receive buffer for incoming data
-            int bufferSize = 32768;
+            const int bufferSize = 32768;
             byte[] data = new byte[bufferSize];
             // Run until thread is terminated
             while (true)
@@ -212,9 +185,9 @@ namespace washared
                     {
                         connectionDropped = networkInterface.SslStream.Read(data);
                     }
-                    catch (IOException) 
-                    { 
-                        throw new ConnectionDroppedException(); 
+                    catch (IOException)
+                    {
+                        throw new ConnectionDroppedException();
                     }
                     if (connectionDropped == 0)
                     {
@@ -322,10 +295,7 @@ namespace washared
                     if (interactive)
                     {
                         dataQueue.Enqueue(parsedData);
-                        if (subscribedThread != null && (subscribedThread.ThreadState & System.Threading.ThreadState.WaitSleepJoin) == System.Threading.ThreadState.WaitSleepJoin)
-                        {
-                            subscribedThread.Interrupt();
-                        }
+                        suspendEvent.Set();
                     }
                 }
             }
