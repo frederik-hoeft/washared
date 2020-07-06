@@ -1,5 +1,6 @@
 ﻿using System;
 using System.Collections.Generic;
+using System.ComponentModel;
 using System.Diagnostics;
 using System.IO;
 using System.Linq;
@@ -22,6 +23,7 @@ namespace washared
         private bool useBackgroundParsing = false;
         private bool useMultiThreading = true;
         private bool interactive = false;
+        private bool isAborted = false;
         private readonly ManualResetEvent suspendEvent = new ManualResetEvent(true);
 
         public PacketParser(NetworkInterface networkInterface)
@@ -87,6 +89,12 @@ namespace washared
                 }
             }
         }
+
+        private void Abort()
+        {
+            isAborted = true;
+        }
+
         /// <summary>
         /// Specifies whether packets should be added to the DataQueue to be handled manually. Cannot be changed once BeginParse() is called.
         /// </summary>
@@ -158,17 +166,11 @@ namespace washared
             return Array.Empty<byte>();
         }
 
-        public async Task ShutdownAsync()
-        {
-            await networkInterface.SslStream.ShutdownAsync();
-            Dispose();
-        }
-
         private void Parse()
         {
-            // Initialize buffer for huge packets (>32 kb)
+            // Initialize buffer for huge packets (>32 KB)
             List<byte> buffer = new List<byte>();
-            // Initialize 32 kb receive buffer for incoming data
+            // Initialize 32 KB receive buffer for incoming data
             const int bufferSize = 32768;
             byte[] data = new byte[bufferSize];
             // Run until thread is terminated
@@ -187,10 +189,18 @@ namespace washared
                     }
                     catch (IOException)
                     {
+                        if (isAborted)
+                        {
+                            return;
+                        }
                         throw new ConnectionDroppedException();
                     }
                     if (connectionDropped == 0)
                     {
+                        if (isAborted)
+                        {
+                            return;
+                        }
                         // Connection was dropped.
                         throw new ConnectionDroppedException();
                     }
@@ -256,7 +266,7 @@ namespace washared
                 for (int i = 0; i < dataPackets.Count; i++)
                 {
                     byte[] packet = dataPackets[i];
-                    // Check if packets have a valid entrypoint / start of heading
+                    // Check if packets have a valid entry point / start of heading
                     if (packet[0] != 0x01)
                     {
                         // Check if there's a valid entry point in the packet
@@ -267,7 +277,7 @@ namespace washared
                             Array.Copy(packet, index, temp, 0, packet.Length - index);
                             packet = temp;
                         }
-                        // This packet is oficially broken (containing several entry points). Hope that it wasn't too important and continue with the next one
+                        // This packet is officially broken (containing several entry points). Hope that it wasn't too important and continue with the next one
                         else
                         {
                             continue;
@@ -316,12 +326,7 @@ namespace washared
             {
                 if (disposing)
                 {
-                    try
-                    {
-                        networkInterface.SslStream.Close();
-                        networkInterface.SslStream.Dispose();
-                    }
-                    catch (ObjectDisposedException) { }
+                    Abort();
                 }
 
                 // Indicate that the instance has been disposed.
