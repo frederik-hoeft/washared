@@ -24,7 +24,7 @@ namespace washared
         private bool useMultiThreading = true;
         private bool interactive = false;
         private bool isAborted = false;
-        private readonly ManualResetEvent suspendEvent = new ManualResetEvent(true);
+        private readonly ManualResetEventSlim suspendEvent = new ManualResetEventSlim(true);
 
         public PacketParser(NetworkInterface networkInterface)
         {
@@ -157,7 +157,7 @@ namespace washared
             {
                 return dataQueue.Dequeue();
             }
-            await Task.Run(() => suspendEvent.WaitOne(millisTimeout));
+            await Task.Run(() => suspendEvent.Wait(millisTimeout));
             suspendEvent.Reset();
             if (dataQueue.Count > 0)
             {
